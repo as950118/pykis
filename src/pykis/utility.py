@@ -22,23 +22,37 @@ import pandas as pd
 from .request_utility import Json, APIResponse
 
 
-def get_order_tr_id_from_market_code(market_code: str, is_buy: bool) -> str:
+def get_order_tr_id_from_market_code(market_code: str, is_buy: bool, is_real: bool) -> str:
     """
     거래소 코드를 입력 받아서 해외 매매 주문 tr_id를 반환한다
     """
     market_code = market_code.upper()
-    if market_code in ["NASD", "NAS", "NYSE", "AMEX", "AMS"]:
-        return "JTTT1002U" if is_buy else "JTTT1006U"
-    if market_code in ["SEHK", "HKS"]:
-        return "TTTS1002U" if is_buy else "TTTS1001U"
-    if market_code in ["SZAA", "SZS"]:  # 심천
-        return "TTTS0305U" if is_buy else "TTTS0304U"
-    if market_code in ["SHAA", "SHS"]:  # 상해
-        return "TTTS0202U" if is_buy else "TTTS1005U"
-    if market_code in ["TKSE", "TSE"]:
-        return "TTTS0308U" if is_buy else "TTTS0307U"
-    if market_code in ["HASE", "VNSE", "HSX", "HNX"]:
-        return "TTTS0311U" if is_buy else "TTTS0310U"
+    if is_real:
+        if market_code in ["NASD", "NAS", "NYSE", "NYS", "AMEX", "AMS"]:
+            return "TTTT1002U" if is_buy else "TTTT1006U"
+        if market_code in ["SEHK", "HKS"]:
+            return "TTTS1002U" if is_buy else "TTTS1001U"
+        if market_code in ["SZAA", "SZS"]:  # 심천
+            return "TTTS0305U" if is_buy else "TTTS0304U"
+        if market_code in ["SHAA", "SHS"]:  # 상해
+            return "TTTS0202U" if is_buy else "TTTS1005U"
+        if market_code in ["TKSE", "TSE"]:
+            return "TTTS0308U" if is_buy else "TTTS0307U"
+        if market_code in ["HASE", "VNSE", "HSX", "HNX"]:
+            return "TTTS0311U" if is_buy else "TTTS0310U"
+    else:
+        if market_code in ["NASD", "NAS", "NYSE", "NYS", "AMEX", "AMS"]:
+            return "VTTT1002U" if is_buy else "VTTT1001U"
+        if market_code in ["SEHK", "HKS"]:
+            return "VTTS1002U" if is_buy else "VTTS1001U"
+        if market_code in ["SZAA", "SZS"]:  # 심천
+            return "VTTS0305U" if is_buy else "VTTS0304U"
+        if market_code in ["SHAA", "SHS"]:  # 상해
+            return "VTTS0202U" if is_buy else "VTTS1005U"
+        if market_code in ["TKSE", "TSE"]:
+            return "VTTS0308U" if is_buy else "VTTS0307U"
+        if market_code in ["HASE", "VNSE", "HSX", "HNX"]:
+            return "VTTS0311U" if is_buy else "VTTS0310U"
     raise RuntimeError(f"invalid market code: {market_code}")
 
 

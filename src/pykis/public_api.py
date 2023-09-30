@@ -326,6 +326,17 @@ class Api:  # pylint: disable=too-many-public-methods
         output2 = res.outputs[1]
         return int(output2[0]["dnca_tot_amt"])
 
+    def get_os_deposit(self) -> int:
+        """
+        해외 주식 잔고의 총 예수금을 반환한다.
+        """
+        res = self._get_os_total_balance("NASD")
+
+        output1 = res.outputs[0]
+        output2 = res.outputs[1]
+        return int(output2[0]["dnca_tot_amt"])
+
+
     def get_os_stock_balance(self) -> pd.DataFrame:
         """
         해외 주식 잔고를 DataFrame으로 반환한다
@@ -361,7 +372,7 @@ class Api:  # pylint: disable=too-many-public-methods
         def request_function(*args, **kwargs):
             return self._get_os_total_balance(market_code, *args, **kwargs)
 
-        return send_continuous_query(request_function, to_dataframe)
+        return send_continuous_query(request_function, to_dataframe, is_kr=self.domain.is_real())
 
     def _get_total_balance(self, is_kr: bool,
                            extra_header: Json = None,
@@ -429,6 +440,52 @@ class Api:  # pylint: disable=too-many-public-methods
 
         return self._get_total_balance(is_kr, extra_header, extra_param)
 
+    def _get_os_inquire_psamount(self, extra_header: Json = None,
+                              extra_param: Json = None) -> APIResponse:
+        """
+        해외 주식 잔고의 주문 가능 예수금을 반환한다. TODO 기능작성중
+        """
+        is_kr = False
+        market_codes = ["NASD", "SEHK", "SHAA", "SZAA", "TKSE", "HASE", "VNSE"]
+        for market_code in market_codes:
+            extra_param = merge_json([{
+                "OVRS_EXCG_CD": market_code,
+            }, none_to_empty_dict(extra_param)])
+            datas = self._get_inquire_psamount(is_kr, extra_header, extra_param)
+
+        return pd.concat(datas)
+
+    def _get_inquire_psamount(self, is_kr: bool,
+                           extra_header: Json = None,
+                           extra_param: Json = None) -> APIResponse:
+        """
+        주문 가능 예수금을 반환한다.
+        """
+        if is_kr:
+            url_path = "/uapi/domestic-stock/v1/trading/inquire-balance"
+            tr_id = "TTTC8434R"
+        else:
+            url_path = "/uapi/overseas-stock/v1/trading/inquire-psamount"
+            tr_id = "TTTS3007R"
+
+        extra_header = none_to_empty_dict(extra_header)
+        extra_param = none_to_empty_dict(extra_param)
+
+        extra_header = merge_json([{"tr_cont": ""}, extra_header])
+        query_code = get_continuous_query_code(is_kr)
+
+        params = {
+            "CANO": self.account.account_code,
+            "ACNT_PRDT_CD": self.account.product_code,
+            f"CTX_AREA_FK{query_code}": "",
+            f"CTX_AREA_NK{query_code}": ""
+        }
+
+        params = merge_json([params, extra_param])
+        req = APIRequestParameter(url_path, tr_id, params,
+                                  extra_header=extra_header)
+        return self._send_get_request(req)
+
     # 잔고 조회------------
 
     # 주문 조회------------
@@ -471,7 +528,10 @@ class Api:  # pylint: disable=too-many-public-methods
         한번만 실행.
         """
         url_path = "/uapi/overseas-stock/v1/trading/inquire-nccs"
-        tr_id = "JTTT3018R"
+        if self.domain.is_real():
+            tr_id = "TTTS3018R"
+        else:
+            tr_id = "VTTT3018R"
 
         extra_header = none_to_empty_dict(extra_header)
         extra_param = none_to_empty_dict(extra_param)
@@ -655,7 +715,7 @@ class Api:  # pylint: disable=too-many-public-methods
 
         url_path = "/uapi/overseas-stock/v1/trading/order"
 
-        tr_id = get_order_tr_id_from_market_code(market_code, buy)
+        tr_id = get_order_tr_id_from_market_code(market_code, buy, self.domain.is_real())
 
         params = {
             "CANO": self.account.account_code,
