@@ -20,6 +20,7 @@ from typing import NamedTuple, Optional, Tuple
 import time
 import pandas as pd
 
+from .oversea_info import Market, get_country_by_market_code
 from .request_utility import *  # pylint: disable = wildcard-import, unused-wildcard-import
 from .domain_info import DomainInfo
 from .access_token import AccessToken
@@ -342,7 +343,7 @@ class Api:  # pylint: disable=too-many-public-methods
         해외 주식 잔고를 DataFrame으로 반환한다
         return: 미국 주식 잔고 정보를 DataFrame으로 반환
         """
-        market_codes = ["NASD", "SEHK", "SHAA", "SZAA", "TKSE", "HASE", "VNSE"]
+        market_codes = Market.get_all()
         datas = [self._get_os_stock_balance(market_code)
                  for market_code in market_codes]
 
@@ -446,7 +447,7 @@ class Api:  # pylint: disable=too-many-public-methods
         해외 주식 잔고의 주문 가능 예수금을 반환한다. TODO 기능작성중
         """
         is_kr = False
-        market_codes = ["NASD", "SEHK", "SHAA", "SZAA", "TKSE", "HASE", "VNSE"]
+        market_codes = Market.get_all()
         for market_code in market_codes:
             extra_param = merge_json([{
                 "OVRS_EXCG_CD": market_code,
@@ -759,6 +760,202 @@ class Api:  # pylint: disable=too-many-public-methods
     # 매매-----------------
 
     # 정정/취소-------------
+    def _revise_cancel_os_orders(self,  # pylint: disable=too-many-arguments
+                                 order_number: str,
+                                 ticker: str,
+                                 market_code: str,
+                                 is_cancel: bool,
+                                 price: float,
+                                 amount: Optional[int] = None,
+                                 ) -> Json:
+        """
+        해외 주식 주문을 정정 또는 취소한다
+        order_number: 주문 번호
+        ticker: 티커
+        market_code: 마켓코드
+        amount: 정정/취소 적용할 주문의 수량
+        price: 정정할 주문의 가격
+        is_cancel: 정정구분(취소-True, 정정-False)
+        return: 서버 response
+        """
+        tr = {
+            "real": {
+                "USA": "TTTT1004U",
+                "HK": "TTTS1003U",
+                "JP": "TTTS0309U",
+                "CN_SHA": "TTTS0302U",
+                "CN_SZX": "TTTS0306U",
+                "VN": "TTTS0312U",
+            },
+            "virtual": {
+                "USA": "VTTT1004U",
+                "HK": "VTTS1003U",
+                "JP": "VTTS0309U",
+                "CN_SHA": "VTTS0302U",
+                "CN_SZX": "VTTS0306U",
+                "VN": "VTTS0312U",
+            }
+        }
+        url_path = "/uapi/overseas-stock/v1/trading/order-rvsecncl"
+        if self.domain.is_real():
+            tr_id = tr["real"][get_country_by_market_code(market_code)]
+        else:
+            tr_id = tr["virtual"][get_country_by_market_code(market_code)]
+
+
+        cancel_dv: str = "02" if is_cancel else "01"
+        price: float = 0 if is_cancel else price
+
+        if amount is None or amount <= 0:
+            amount = 1
+
+        params = {
+            "CANO": self.account.account_code,
+            "ACNT_PRDT_CD": self.account.product_code,
+            "OVRS_EXCG_CD": market_code,
+            "PDNO": ticker,
+            "ORGN_ODNO": order_number,
+            "RVSE_CNCL_DVSN_CD": cancel_dv,
+            "ORD_QTY": str(amount),
+            "OVRS_ORD_UNPR": str(price),
+        }
+
+        req = APIRequestParameter(url_path, tr_id=tr_id,
+                                  params=params, requires_authentication=True, requires_hash=True)
+
+        res = self._send_post_request(req)
+        return res.body
+
+    def cancel_os_order(self,
+                        order_number: str,
+                        ticker: str,
+                        market_code:str,
+                        amount: Optional[int] = None,
+                        ) -> Json:
+        """
+        해외 주식 주문을 취소한다.
+        order_number: 주문 번호.
+        ticker: 티커
+        market_code: 마켓코드
+        amount: 취소할 수량. 지정하지 않은 경우 잔량 전부 취소.
+        return: 서버 response.
+        """
+
+        return self._revise_cancel_os_orders(
+            order_number=order_number,
+            ticker=ticker,
+            market_code=market_code,
+            is_cancel=True,
+            amount=amount,
+            price=0
+        )
+
+    def cancel_all_os_orders(self) -> List(Json):
+        """
+        미체결된 모든 해외 주식 주문들을 취소한다.
+        return: 서버 response list.
+        """
+        data = self.get_os_orders()
+        orders = data.index.to_list()
+        tickers = data["pdno"].to_list()
+        markets = data["ovrs_excg_cd"].to_list()
+        amounts = data["nccs_qty"].to_list()
+        delay = 0.2  # sec
+
+        rets = []
+
+        for order, ticker, amount, market_code in zip(orders, tickers, amounts, markets):
+            rets.append(
+                self.cancel_os_order(
+                    order_number=order,
+                    ticker=ticker,
+                    amount=amount,
+                    market_code=market_code
+                )
+            )
+            time.sleep(delay)
+
+        return rets
+
+    def revise_os_order(
+            self,
+            order_number: str,
+            ticker: str,
+            market_code:str,
+            price: float,
+            amount: Optional[int] = None,
+    ) -> Json:
+        """
+        해외 주식 주문의 가격을 정정한다.
+        order_number: 주문 번호.
+        price: 정정할 1주당 가격.
+        amount: 정정할 수량. 지정하지 않은 경우 잔량 전부 정정.
+        return: 서버 response.
+        """
+
+        return self._revise_cancel_os_orders(
+            order_number=order_number,
+            ticker=ticker,
+            market_code=market_code,
+            is_cancel=False,
+            amount=amount,
+            price=price
+        )
+
+    def revise_os_order_by_current_price(
+            self,
+            order_number: str,
+            ticker: str,
+            market_code:str,
+            amount: Optional[int] = None,
+    ) -> Json:
+        """
+        해외 주식 주문의 가격을 현재가로 정정한다.
+        order_number: 주문 번호.
+        ticker: 티커
+        market_code: 마켓코드
+        amount: 정정할 수량. 지정하지 않은 경우 잔량 전부 정정.
+        return: 서버 response.
+        """
+
+        price = self.get_os_current_price(ticker=ticker, market_code=market_code)
+
+        return self._revise_cancel_os_orders(
+            order_number=order_number,
+            ticker=ticker,
+            market_code=market_code,
+            is_cancel=False,
+            price=price,
+            amount=amount,
+        )
+
+    def revise_all_os_order_by_current_price(self) -> List(Json):
+        """
+        모든 해외 주식 주문의 가격을 현재가로 정정한다.
+        return: 서버 response list.
+        """
+        data = self.get_os_orders()
+        orders = data.index.to_list()
+        tickers = data["pdno"].to_list()
+        markets = data["ovrs_excg_cd"].to_list()
+        amounts = data["nccs_qty"].to_list()
+        delay = 0.3  # sec
+
+        rets = []
+
+        for order, ticker, amount, market_code in zip(orders, tickers, amounts, markets):
+            rets.append(
+                self.revise_os_order_by_current_price(
+                    order_number=order,
+                    ticker=ticker,
+                    amount=amount,
+                    market_code=market_code
+                )
+            )
+            time.sleep(delay)
+
+        return rets
+
     def _revise_cancel_kr_orders(self,  # pylint: disable=too-many-arguments
                                  order_number: str,
                                  is_cancel: bool,
