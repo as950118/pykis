@@ -850,7 +850,7 @@ class Api:  # pylint: disable=too-many-public-methods
             price=0
         )
 
-    def cancel_all_os_orders(self) -> List(Json):
+    def cancel_all_os_orders(self) -> [Json]:
         """
         미체결된 모든 해외 주식 주문들을 취소한다.
         return: 서버 response list.
@@ -929,7 +929,7 @@ class Api:  # pylint: disable=too-many-public-methods
             amount=amount,
         )
 
-    def revise_all_os_order_by_current_price(self) -> List(Json):
+    def revise_all_os_order_by_current_price(self) -> [Json]:
         """
         모든 해외 주식 주문의 가격을 현재가로 정정한다.
         return: 서버 response list.

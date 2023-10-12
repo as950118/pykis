@@ -15,7 +15,7 @@ request 관련 유틸리티 모듈
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import NamedTuple, Optional, Dict, Any, List
+from typing import NamedTuple, Optional, Dict, Any
 import json
 import requests
 
@@ -45,7 +45,7 @@ class APIResponse:
         self.body: Json = resp.json()
         self.message: str = self._message()
         self.return_code: Optional[str] = self._return_code()
-        self.outputs: List[Json] = self._outputs()
+        self.outputs: [Json] = self._outputs()
 
     def is_ok(self) -> bool:
         """
@@ -84,7 +84,7 @@ class APIResponse:
         """
         return self.body.get("rt_cd", None)
 
-    def _outputs(self) -> List[Json]:
+    def _outputs(self) -> [Json]:
         """
         API의 output 값(ex> output, output1, output2)들을 list로 가져온다.
         뒤에 붙은 번호 순서대로(output이 있는 경우 제일 앞) 배치한다.
