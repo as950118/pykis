@@ -331,11 +331,20 @@ class Api:  # pylint: disable=too-many-public-methods
         """
         해외 주식 잔고의 총 예수금을 반환한다.
         """
-        res = self._get_os_total_balance("NASD")
+        if self.domain.is_real():
+            is_kr = False
+            res = self._get_inquire_psamount(is_kr=is_kr)
 
-        output1 = res.outputs[0]
-        output2 = res.outputs[1]
-        return int(output2[0]["dnca_tot_amt"])
+            output = res.body['output']
+            ovrs_ord_psbl_amt = float(output["ovrs_ord_psbl_amt"])  # 외화증거금일시
+            frcr_ord_psbl_amt1 = float(output["frcr_ord_psbl_amt1"])  # 통합증거금일시
+            exrt = float(output["exrt"])  # 환율
+            return (ovrs_ord_psbl_amt + frcr_ord_psbl_amt1) * exrt
+        else:
+            res = self._get_kr_total_balance()
+
+            output2 = res.outputs[1]
+            return int(output2[0]["dnca_tot_amt"])
 
 
     def get_os_stock_balance(self) -> pd.DataFrame:
@@ -468,6 +477,11 @@ class Api:  # pylint: disable=too-many-public-methods
         else:
             url_path = "/uapi/overseas-stock/v1/trading/inquire-psamount"
             tr_id = "TTTS3007R"
+            extra_param = {
+                "OVRS_EXCG_CD":"NASD",
+                "OVRS_ORD_UNPR":"0",
+                "ITEM_CD":"NDAQ"
+            }
 
         extra_header = none_to_empty_dict(extra_header)
         extra_param = none_to_empty_dict(extra_param)
@@ -627,7 +641,7 @@ class Api:  # pylint: disable=too-many-public-methods
                 sell_or_buy)
 
             data[market_code_column] = data[market_code_column].apply(
-                self.market_code_map.to_3
+                self.market_code_map.to_4
             )
 
             data = data.rename(columns=rename_map)
@@ -806,7 +820,7 @@ class Api:  # pylint: disable=too-many-public-methods
         cancel_dv: str = "02" if is_cancel else "01"
         price: float = 0 if is_cancel else price
 
-        if amount is None or amount <= 0:
+        if amount is None or int(amount) <= 0:
             amount = 1
 
         params = {
@@ -918,7 +932,7 @@ class Api:  # pylint: disable=too-many-public-methods
         return: 서버 response.
         """
 
-        price = self.get_os_current_price(ticker=ticker, market_code=market_code)
+        price = self.get_os_current_price(ticker=ticker, market_code=self.market_code_map.to_3(market_code))
 
         return self._revise_cancel_os_orders(
             order_number=order_number,
@@ -938,9 +952,9 @@ class Api:  # pylint: disable=too-many-public-methods
         orders = data.index.to_list()
         rets = []
         if not data.empty:
-            tickers = data["pdno"].to_list()
-            markets = data["ovrs_excg_cd"].to_list()
-            amounts = data["nccs_qty"].to_list()
+            tickers = data["종목코드"].to_list()
+            markets = data["해외거래소코드"].to_list()
+            amounts = data["미체결수량"].to_list()
             delay = 0.3  # sec
 
 
@@ -980,7 +994,7 @@ class Api:  # pylint: disable=too-many-public-methods
 
         apply_all = "N"  # apply_all: 잔량전부주문여부(Y-잔량전부, N-잔량일부)
 
-        if amount is None or amount <= 0:
+        if amount is None or int(amount) <= 0:
             apply_all = "Y"
             amount = 1
 
