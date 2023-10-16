@@ -936,24 +936,24 @@ class Api:  # pylint: disable=too-many-public-methods
         """
         data = self.get_os_orders()
         orders = data.index.to_list()
-        tickers = data["pdno"].to_list()
-        markets = data["ovrs_excg_cd"].to_list()
-        amounts = data["nccs_qty"].to_list()
-        delay = 0.3  # sec
-
         rets = []
+        if data.empty:
+            tickers = data["pdno"].to_list()
+            markets = data["ovrs_excg_cd"].to_list()
+            amounts = data["nccs_qty"].to_list()
+            delay = 0.3  # sec
 
-        for order, ticker, amount, market_code in zip(orders, tickers, amounts, markets):
-            rets.append(
-                self.revise_os_order_by_current_price(
-                    order_number=order,
-                    ticker=ticker,
-                    amount=amount,
-                    market_code=market_code
+
+            for order, ticker, amount, market_code in zip(orders, tickers, amounts, markets):
+                rets.append(
+                    self.revise_os_order_by_current_price(
+                        order_number=order,
+                        ticker=ticker,
+                        amount=amount,
+                        market_code=market_code
+                    )
                 )
-            )
-            time.sleep(delay)
-
+                time.sleep(delay)
         return rets
 
     def _revise_cancel_kr_orders(self,  # pylint: disable=too-many-arguments
