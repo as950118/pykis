@@ -937,7 +937,7 @@ class Api:  # pylint: disable=too-many-public-methods
         data = self.get_os_orders()
         orders = data.index.to_list()
         rets = []
-        if data.empty:
+        if not data.empty:
             tickers = data["pdno"].to_list()
             markets = data["ovrs_excg_cd"].to_list()
             amounts = data["nccs_qty"].to_list()
