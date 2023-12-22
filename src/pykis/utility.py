@@ -20,7 +20,9 @@ from typing import Callable, Iterable, Optional, NamedTuple
 from collections import namedtuple
 import pandas as pd
 from .request_utility import Json, APIResponse
+import time
 
+DELAY = 0.2
 
 def get_order_tr_id_from_market_code(market_code: str, is_buy: bool, is_real: bool) -> str:
     """
@@ -94,6 +96,7 @@ def send_continuous_query(request_function: Callable[[Json, Json], APIResponse],
     extra_header = {}
     extra_param = {}
     for i in range(max_count):
+        time.sleep(DELAY)
         if i > 0:
             extra_header = {"tr_cont": "N"}    # 공백 : 초기 조회, N : 다음 데이터 조회
         res = request_function(

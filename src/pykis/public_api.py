@@ -28,6 +28,8 @@ from .utility import *  # pylint: disable = wildcard-import, unused-wildcard-imp
 from .market_code_map import MarketCodeMap
 
 
+DELAY = 0.2
+
 class Api:  # pylint: disable=too-many-public-methods
     """
     pykis의 public api를 나타내는 클래스
@@ -420,6 +422,7 @@ class Api:  # pylint: disable=too-many-public-methods
         """
         해외 주식 잔고의 조회 전체 결과를 반환한다.
         """
+        time.sleep(DELAY)
         currency_code = get_currency_code_from_market_code(market_code)
 
         extra_param = merge_json([{
