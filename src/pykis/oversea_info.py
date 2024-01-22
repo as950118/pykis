@@ -17,7 +17,6 @@ class Country(Enum):
 
 class Market(Enum):
     NASD = 0
-    NAS = 0
     NYSE = 1
     AMEX = 2
 

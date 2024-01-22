@@ -358,7 +358,7 @@ class Api:  # pylint: disable=too-many-public-methods
         datas = [self._get_os_stock_balance(market_code)
                  for market_code in market_codes]
 
-        return pd.concat(datas)
+        return pd.concat(datas).drop_duplicates()
 
     def _get_os_stock_balance(self, market_code: str) -> pd.DataFrame:
         """
@@ -466,7 +466,7 @@ class Api:  # pylint: disable=too-many-public-methods
             }, none_to_empty_dict(extra_param)])
             datas = self._get_inquire_psamount(is_kr, extra_header, extra_param)
 
-        return pd.concat(datas)
+        return pd.concat(datas).drop_duplicates()
 
     def _get_inquire_psamount(self, is_kr: bool,
                            extra_header: Json = None,
@@ -491,6 +491,54 @@ class Api:  # pylint: disable=too-many-public-methods
 
         extra_header = merge_json([{"tr_cont": ""}, extra_header])
         query_code = get_continuous_query_code(is_kr)
+
+        params = {
+            "CANO": self.account.account_code,
+            "ACNT_PRDT_CD": self.account.product_code,
+            f"CTX_AREA_FK{query_code}": "",
+            f"CTX_AREA_NK{query_code}": ""
+        }
+
+        params = merge_json([params, extra_param])
+        req = APIRequestParameter(url_path, tr_id, params,
+                                  extra_header=extra_header)
+        return self._send_get_request(req)
+
+    def _get_os_inquire_present_balance(self, extra_header: Json = None,
+                                 extra_param: Json = None) -> APIResponse:
+        """
+        해외 주식 잔고의 주문 가능 예수금을 반환한다. TODO 기능작성중
+        """
+        is_kr = False
+        market_codes = Market.get_all()
+        response = self._get_inquire_present_balance(extra_header, extra_param)
+        datas = response.outputs[1]
+
+        return pd.DataFrame(datas)
+
+    def _get_inquire_present_balance(self,
+                              extra_header: Json = None,
+                              extra_param: Json = None) -> APIResponse:
+        """
+        해외 주식 체결기준 예수금을 반환한다.
+        """
+        url_path = "/uapi/overseas-stock/v1/trading/inquire-present-balance"
+        if self.domain.is_real():
+            tr_id = "CTRP6504R"
+        else:
+            tr_id = "VTRP6504R"
+        extra_param = {
+            "WCRC_FRCR_DVSN_CD": "01",
+            "NATN_CD":"000",
+            "TR_MKET_CD":"00",
+            "INQR_DVSN_CD":"00"
+        }
+
+        extra_header = none_to_empty_dict(extra_header)
+        extra_param = none_to_empty_dict(extra_param)
+
+        extra_header = merge_json([{"tr_cont": ""}, extra_header])
+        query_code = get_continuous_query_code(False)
 
         params = {
             "CANO": self.account.account_code,
@@ -639,6 +687,58 @@ class Api:  # pylint: disable=too-many-public-methods
             }
 
             data = data[rename_map.keys()]
+            
+            data[sell_or_buy_column] = data[sell_or_buy_column].apply(sell_or_buy)
+
+            data[market_code_column] = data[market_code_column].apply(
+                self.market_code_map.to_4
+            )
+
+            data = data.rename(columns=rename_map)
+
+            return data
+
+    def get_os_buy_orders(self):
+        return self.get_os_orders_by_flag("매수")
+
+    def get_os_sell_orders(self):
+        return self.get_os_orders_by_flag("매도")
+
+    def get_os_orders_by_flag(self, sell_or_buy=None) -> pd.DataFrame:
+        """
+        미체결 해외 주식 매수 주문 목록을 DataFrame으로 반환한다.
+        """
+        def sell_or_buy(value):  # 01: 매도, 02: 매수
+            return "매도" if value == "01" else "매수"
+
+        def to_dataframe(res: APIResponse) -> pd.DataFrame:
+            data = pd.DataFrame(res.outputs[0])
+            if data.empty:
+                return data
+
+            sell_or_buy_column = "sll_buy_dvsn_cd"
+            market_code_column = "ovrs_excg_cd"
+
+            data.set_index("odno", inplace=True)
+
+            rename_map = {
+                "pdno": "종목코드",
+                "ft_ord_qty": "주문수량",
+                "ft_ccld_qty": "체결수량",
+                "nccs_qty": "미체결수량",
+                "ft_ord_unpr3": "주문가격",
+                sell_or_buy_column: "매수매도구분",
+                "ord_tmd": "시간",
+                "ord_gno_brno": "주문점",
+                "orgn_odno": "원번호",
+                market_code_column: "해외거래소코드",
+                "tr_crcy_cd": "거래통화코드",
+                "prcs_stat_name": "처리상태명",
+                "rjct_rson_name": "거부사유명",
+                "rjct_rson": "거부사유",
+            }
+
+            data = data[rename_map.keys()]
 
             data[sell_or_buy_column] = data[sell_or_buy_column].apply(
                 sell_or_buy)
@@ -646,6 +746,9 @@ class Api:  # pylint: disable=too-many-public-methods
             data[market_code_column] = data[market_code_column].apply(
                 self.market_code_map.to_4
             )
+
+            if sell_or_buy:
+                data = data[data[sell_or_buy_column] == sell_or_buy]
 
             data = data.rename(columns=rename_map)
 
@@ -946,12 +1049,36 @@ class Api:  # pylint: disable=too-many-public-methods
             amount=amount,
         )
 
+    def revise_os_order_by_current_price(self, order_id) -> [Json]:
+        """
+        특정 해외 주식 주문의 가격을 현재가로 정정한다.
+        return: 서버 response.
+        """
+        # 먼저 미체결 목록들을 불러온다
+        data = self.get_os_orders()
+
+        # 해당 order_id와 일치하는 주문이 있는지 확인한다
+        order = data[data["orgn_odno"] == order_id]
+        ret = None
+        if order and not order.empty():
+            code = order["종목코드"]
+            market_code = order["해외거래소코드"]
+            amount = order["미체결수량"]
+            ret = self.revise_os_order_by_current_price(
+                order_number=order,
+                ticker=ticker,
+                amount=amount,
+                market_code=market_code
+            )
+
+        return ret
+
     def revise_all_os_order_by_current_price(self) -> [Json]:
         """
         모든 해외 주식 주문의 가격을 현재가로 정정한다.
         return: 서버 response list.
         """
-        data = self.get_os_orders()
+        data = self.get_os_orders_by_flag()
         orders = data.index.to_list()
         rets = []
         if not data.empty:
@@ -960,16 +1087,45 @@ class Api:  # pylint: disable=too-many-public-methods
             amounts = data["미체결수량"].to_list()
             delay = 0.3  # sec
 
-
             for order, ticker, amount, market_code in zip(orders, tickers, amounts, markets):
-                rets.append(
-                    self.revise_os_order_by_current_price(
+                try:
+                    ret = self.revise_os_order_by_current_price(
                         order_number=order,
                         ticker=ticker,
                         amount=amount,
                         market_code=market_code
                     )
-                )
+                    rets.append(ret)
+                except Exception as e:
+                    print(e)
+                time.sleep(delay)
+        return rets
+
+    def revise_all_os_buy_order_by_current_price(self) -> [Json]:
+        """
+        모든 해외 주식 매수 주문의 가격을 현재가로 정정한다.
+        return: 서버 response list.
+        """
+        data = self.get_os_buy_orders()
+        orders = data.index.to_list()
+        rets = []
+        if not data.empty:
+            tickers = data["종목코드"].to_list()
+            markets = data["해외거래소코드"].to_list()
+            amounts = data["미체결수량"].to_list()
+            delay = 0.3  # sec
+
+            for order, ticker, amount, market_code in zip(orders, tickers, amounts, markets):
+                try:
+                    ret = self.revise_os_order_by_current_price(
+                        order_number=order,
+                        ticker=ticker,
+                        amount=amount,
+                        market_code=market_code
+                    )
+                    rets.append(ret)
+                except Exception as e:
+                    print(e)
                 time.sleep(delay)
         return rets
 
