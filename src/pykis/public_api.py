@@ -19,6 +19,7 @@ pykist 패키지의 public api 모음
 from typing import NamedTuple, Optional, Tuple
 import time
 import pandas as pd
+import datetime
 
 from .oversea_info import Market, get_country_by_market_code
 from .request_utility import *  # pylint: disable = wildcard-import, unused-wildcard-import
@@ -384,7 +385,7 @@ class Api:  # pylint: disable=too-many-public-methods
         def request_function(*args, **kwargs):
             return self._get_os_total_balance(market_code, *args, **kwargs)
 
-        return send_continuous_query(request_function, to_dataframe, is_kr=self.domain.is_real())
+        return send_continuous_query(request_function, to_dataframe, is_kr=False)
 
     def _get_total_balance(self, is_kr: bool,
                            extra_header: Json = None,
@@ -454,7 +455,7 @@ class Api:  # pylint: disable=too-many-public-methods
         return self._get_total_balance(is_kr, extra_header, extra_param)
 
     def _get_os_inquire_psamount(self, extra_header: Json = None,
-                              extra_param: Json = None) -> APIResponse:
+                                 extra_param: Json = None) -> APIResponse:
         """
         해외 주식 잔고의 주문 가능 예수금을 반환한다. TODO 기능작성중
         """
@@ -469,8 +470,8 @@ class Api:  # pylint: disable=too-many-public-methods
         return pd.concat(datas).drop_duplicates()
 
     def _get_inquire_psamount(self, is_kr: bool,
-                           extra_header: Json = None,
-                           extra_param: Json = None) -> APIResponse:
+                              extra_header: Json = None,
+                              extra_param: Json = None) -> APIResponse:
         """
         주문 가능 예수금을 반환한다.
         """
@@ -505,7 +506,7 @@ class Api:  # pylint: disable=too-many-public-methods
         return self._send_get_request(req)
 
     def _get_os_inquire_present_balance(self, extra_header: Json = None,
-                                 extra_param: Json = None) -> APIResponse:
+                                        extra_param: Json = None) -> APIResponse:
         """
         해외 주식 잔고의 주문 가능 예수금을 반환한다. TODO 기능작성중
         """
@@ -517,8 +518,8 @@ class Api:  # pylint: disable=too-many-public-methods
         return pd.DataFrame(datas)
 
     def _get_inquire_present_balance(self,
-                              extra_header: Json = None,
-                              extra_param: Json = None) -> APIResponse:
+                                     extra_header: Json = None,
+                                     extra_param: Json = None) -> APIResponse:
         """
         해외 주식 체결기준 예수금을 반환한다.
         """
@@ -546,6 +547,262 @@ class Api:  # pylint: disable=too-many-public-methods
             f"CTX_AREA_FK{query_code}": "",
             f"CTX_AREA_NK{query_code}": ""
         }
+
+        params = merge_json([params, extra_param])
+        req = APIRequestParameter(url_path, tr_id, params,
+                                  extra_header=extra_header)
+        return self._send_get_request(req)
+
+    def get_os_order_history(self) -> pd.DataFrame:
+        """
+        해외 주식 주묵 내역을 DataFrame으로 반환한다
+        return: 미국 주식 주문 내역을 DataFrame으로 반환
+        """
+        datas = [self._get_os_order_history()]
+        return pd.concat(datas).drop_duplicates()
+
+    def get_kr_order_history(self) -> pd.DataFrame:
+        """
+        국내 주식 주묵 내역을 DataFrame으로 반환한다
+        return: 미국 주식 주문 내역을 DataFrame으로 반환
+        """
+        datas = [self._get_kr_order_history()]
+        return pd.concat(datas).drop_duplicates()
+
+    def _get_os_order_history(self) -> pd.DataFrame:
+        """
+        해외 주식 주문 내역
+        return: 해외 주식 주문 내역을 DataFrame으로 반환
+        """
+
+        def to_dataframe(res: APIResponse) -> pd.DataFrame:
+            tdf = pd.DataFrame(res.body['output'])
+            if tdf.empty:
+                return tdf
+            cf1 = [
+                "ord_dt",
+                "ord_gno_brno",
+                "odno",
+                "orgn_odno",
+                "sll_buy_dvsn_cd",
+                "sll_buy_dvsn_cd_name",
+                "rvse_cncl_dvsn",
+                "rvse_cncl_dvsn_name",
+                "pdno",
+                "prdt_name",
+                "ft_ord_qty",
+                "ft_ord_unpr3",
+                "ft_ccld_qty",
+                "ft_ccld_unpr3",
+                "ft_ccld_amt3",
+                "nccs_qty",
+                "prcs_stat_name",
+                "rjct_rson",
+                "ord_tmd",
+                "tr_mket_name",
+                "tr_natn",
+                "tr_natn_name",
+                "ovrs_excg_cd",
+                "tr_crcy_cd",
+                "dmst_ord_dt",
+                "thco_ord_tmd",
+                "loan_type_cd",
+                "mdia_dvsn_name",
+                "loan_dt",
+                "rjct_rson_name",
+                "usa_amk_exts_rqst_yn"
+            ]
+
+            cf2 = [
+                "주문일자",
+                "주문채번지점번호",
+                "주문번호",
+                "원주문번호",
+                "매도매수구분코드",
+                "매도매수구분코드명",
+                "정정취소구분",
+                "정정취소구분명",
+                "상품번호",
+                "상품명",
+                "FT주문수량",
+                "FT주문단가3",
+                "FT체결수량",
+                "FT체결단가3",
+                "FT체결금액3",
+                "미체결수량",
+                "처리상태명",
+                "거부사유",
+                "주문시각",
+                "거래시장명",
+                "거래국가",
+                "거래국가명",
+                "해외거래소코드",
+                "거래통화코드",
+                "국내주문일자",
+                "당사주문시각",
+                "대출유형코드",
+                "매체구분명",
+                "대출일자",
+                "거부사유명",
+                "미국애프터마켓연장신청여부"
+            ]
+            ren_dict = dict(zip(cf1, cf2))
+            return tdf.rename(columns=ren_dict)
+
+        def request_function(*args, **kwargs):
+            return self._get_order_history(is_kr=False, *args, **kwargs)
+
+        return send_continuous_query(request_function, to_dataframe, is_kr=False)
+
+    def _get_kr_order_history(self) -> pd.DataFrame:
+        """
+        국내 주식 주문 내역
+        return: 해외 주식 주문 내역을 DataFrame으로 반환
+        """
+
+        def to_dataframe(res: APIResponse) -> pd.DataFrame:
+            tdf = pd.DataFrame(res.outputs[0])
+            if tdf.empty:
+                return tdf
+
+            cf1 = [
+                "ord_dt",
+                "ord_gno_brno",
+                "odno",
+                "orgn_odno",
+                "ord_dvsn_name",
+                "sll_buy_dvsn_cd",
+                "sll_buy_dvsn_cd_name",
+                "pdno",
+                "prdt_name",
+                "ord_qty",
+                "ord_unpr",
+                "ord_tmd",
+                "tot_ccld_qty",
+                "avg_prvs",
+                "cncl_yn",
+                "tot_ccld_amt",
+                "loan_dt",
+                "ord_dvsn_cd",
+                "cncl_cfrm_qty",
+                "rmn_qty",
+                "rjct_qty",
+                "ccld_cndt_name",
+                "infm_tmd",
+                "ctac_tlno",
+                "prdt_type_cd",
+                "excg_dvsn_cd"
+            ]
+            cf2 = [
+                "주문일자",
+                "주문채번지점번호",
+                "주문번호",
+                "원주문번호",
+                "주문구분명",
+                "매도매수구분코드",
+                "매도매수구분코드명",
+                "상품번호",
+                "상품명",
+                "주문수량",
+                "주문단가",
+                "주문시각",
+                "총체결수량",
+                "평균가",
+                "취소여부",
+                "총체결금액",
+                "대출일자",
+                "주문구분코드",
+                "취소확인수량",
+                "잔여수량",
+                "거부수량",
+                "체결조건명",
+                "통보시각",
+                "연락전화번호",
+                "상품유형코드",
+                "거래소구분코드"
+            ]
+            tdf = tdf[cf1]
+            ren_dict = dict(zip(cf1, cf2))
+            return tdf.rename(columns=ren_dict)
+
+        def request_function(*args, **kwargs):
+            return self._get_order_history(is_kr=True, *args, **kwargs)
+
+        return send_continuous_query(request_function, to_dataframe, is_kr=True)
+
+    def _get_order_history(self,
+                           is_kr: bool,
+                           sell_or_buy: str = "00",
+                           extra_header: Json = None,
+                           extra_param: Json = None) -> APIResponse:
+        """
+        주식 주문 내역의 조회 전체 결과를 반환한다.
+        """
+        if is_kr:
+            url_path = "/uapi/domestic-stock/v1/trading/inquire-daily-ccld"
+            tr_id = "TTTC8001R"
+            if not self.domain.is_real():
+                tr_id= "VTTC8001R"
+            PDNO = ""
+
+        else:
+            url_path = "/uapi/overseas-stock/v1/trading/inquire-ccnl"
+            tr_id = "TTTS3035R"
+            if not self.domain.is_real():
+                tr_id = "VTTS3035R"
+
+            # 시장 관련
+            OVRS_EXCG_CD = "NASD" # TODO 현재는 미국시장 전체만
+            if not self.domain.is_real():
+                OVRS_EXCG_CD = ""
+
+            PDNO = "%" # TODO 현재는 미국시장 전체만
+            if not self.domain.is_real():
+                PDNO = ""
+
+        ORD_STRT_DT = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y%m%d")
+        ORD_END_DT = datetime.datetime.now().strftime("%Y%m%d")
+
+        extra_header = none_to_empty_dict(extra_header)
+        extra_param = none_to_empty_dict(extra_param)
+
+        extra_header = merge_json([{"tr_cont": ""}, extra_header])
+        query_code = get_continuous_query_code(is_kr)
+
+        if is_kr:
+            params = {
+                "CANO": self.account.account_code,
+                "ACNT_PRDT_CD": self.account.product_code,
+                "INQR_STRT_DT": ORD_STRT_DT,
+                "INQR_END_DT": ORD_END_DT,
+                "SLL_BUY_DVSN_CD": sell_or_buy,
+                "INQR_DVSN": "AS",
+                "PDNO": PDNO,
+                "CCLD_DVSN": "00",
+                "ORD_GNO_BRNO": "",
+                "ODNO": "",
+                "INQR_DVSN_3": "00",
+                "INQR_DVSN_1": "00",
+                f"CTX_AREA_FK{query_code}": "",
+                f"CTX_AREA_NK{query_code}": ""
+            }
+        else:
+            params = {
+                "CANO": self.account.account_code,
+                "ACNT_PRDT_CD": self.account.product_code,
+                "PDNO": PDNO,
+                "ORD_STRT_DT": ORD_STRT_DT,
+                "ORD_END_DT": ORD_END_DT,
+                "SLL_BUY_DVSN": sell_or_buy,
+                "CCLD_NCCS_DVSN": "00",
+                "OVRS_EXCG_CD": OVRS_EXCG_CD,
+                "SORT_SQN": "AS",
+                "ORD_DT": "",
+                "ORD_GNO_BRNO": "",
+                "ODNO": "",
+                f"CTX_AREA_FK{query_code}": "",
+                f"CTX_AREA_NK{query_code}": ""
+            }
 
         params = merge_json([params, extra_param])
         req = APIRequestParameter(url_path, tr_id, params,
@@ -687,7 +944,7 @@ class Api:  # pylint: disable=too-many-public-methods
             }
 
             data = data[rename_map.keys()]
-            
+
             data[sell_or_buy_column] = data[sell_or_buy_column].apply(sell_or_buy)
 
             data[market_code_column] = data[market_code_column].apply(
