@@ -367,13 +367,8 @@ class Api:  # pylint: disable=too-many-public-methods
                 return True
             else:
                 return False
-        return False
-
         else:
-            res = self._get_kr_total_balance()
-
-            output2 = res.outputs[1]
-            return int(output2[0]["dnca_tot_amt"])
+            return False
 
 
     def get_os_stock_balance(self) -> pd.DataFrame:
