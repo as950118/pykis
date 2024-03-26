@@ -330,7 +330,7 @@ class Api:  # pylint: disable=too-many-public-methods
         output2 = res.outputs[1]
         return int(output2[0]["dnca_tot_amt"])
 
-    def get_os_deposit(self) -> int:
+    def get_os_deposit(self) -> float:
         """
         해외 주식 잔고의 총 예수금을 반환한다.
         """
@@ -342,7 +342,33 @@ class Api:  # pylint: disable=too-many-public-methods
             ovrs_ord_psbl_amt = float(output["ovrs_ord_psbl_amt"])  # 외화증거금일시
             frcr_ord_psbl_amt1 = float(output["frcr_ord_psbl_amt1"])  # 통합증거금일시
             exrt = float(output["exrt"])  # 환율
-            return (ovrs_ord_psbl_amt + frcr_ord_psbl_amt1) * exrt
+            if frcr_ord_psbl_amt1 > 0:
+                return frcr_ord_psbl_amt1 * exrt
+            else:
+                return ovrs_ord_psbl_amt * exrt
+        else:
+            res = self._get_kr_total_balance()
+
+            output2 = res.outputs[1]
+            return int(output2[0]["dnca_tot_amt"])
+
+    def get_is_integrate(self) -> float:
+        """
+        통합 증거금 여부를 추정합니다. 모의투자는 불가합니다.
+        """
+        if self.domain.is_real():
+            is_kr = False
+            res = self._get_inquire_psamount(is_kr=is_kr)
+
+            output = res.body['output']
+            ovrs_ord_psbl_amt = float(output["ovrs_ord_psbl_amt"])  # 외화증거금일시
+            frcr_ord_psbl_amt1 = float(output["frcr_ord_psbl_amt1"])  # 통합증거금일시
+            if ovrs_ord_psbl_amt == frcr_ord_psbl_amt1:
+                return True
+            else:
+                return False
+        return False
+
         else:
             res = self._get_kr_total_balance()
 
