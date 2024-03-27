@@ -308,6 +308,7 @@ class Api:  # pylint: disable=too-many-public-methods
                 return tdf
 
             tdf.set_index("pdno", inplace=True)
+            tdf = tdf.replace('nan', 0)
             cf1 = ["prdt_name", "hldg_qty", "ord_psbl_qty", "pchs_avg_pric",
                    "evlu_pfls_rt", "prpr", "bfdy_cprs_icdc", "fltt_rt"]
             cf2 = ["종목명", "보유수량", "매도가능수량", "매입단가", "수익율", "현재가", "전일대비", "등락"]
