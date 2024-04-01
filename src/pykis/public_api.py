@@ -329,7 +329,7 @@ class Api:  # pylint: disable=too-many-public-methods
         res = self._get_kr_total_balance()
 
         output2 = res.outputs[1]
-        return int(output2[0]["dnca_tot_amt"])
+        return int(output2[0]["prvs_rcdl_excc_amt"])
 
     def get_os_deposit(self) -> float:
         """
@@ -351,7 +351,7 @@ class Api:  # pylint: disable=too-many-public-methods
             res = self._get_kr_total_balance()
 
             output2 = res.outputs[1]
-            return int(output2[0]["dnca_tot_amt"])
+            return int(output2[0]["prvs_rcdl_excc_amt"])
 
     def get_is_integrate(self) -> float:
         """
