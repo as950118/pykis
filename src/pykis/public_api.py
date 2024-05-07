@@ -353,7 +353,7 @@ class Api:  # pylint: disable=too-many-public-methods
             output2 = res.outputs[1]
             return int(output2[0]["prvs_rcdl_excc_amt"])
 
-    def get_is_integrate(self) -> float:
+    def get_is_integrate(self) -> Optional[bool]:
         """
         통합 증거금 여부를 추정합니다. 모의투자는 불가합니다.
         """
@@ -364,12 +364,20 @@ class Api:  # pylint: disable=too-many-public-methods
             output = res.body['output']
             ovrs_ord_psbl_amt = float(output["ovrs_ord_psbl_amt"])  # 외화증거금일시
             frcr_ord_psbl_amt1 = float(output["frcr_ord_psbl_amt1"])  # 통합증거금일시
-            if ovrs_ord_psbl_amt == frcr_ord_psbl_amt1:
+
+            kr_deposit = self.get_kr_deposit()
+
+            # 통합증거금이 조회되면 통합증거금 신청한거임
+            if frcr_ord_psbl_amt1:
                 return True
             else:
+                # 통합증거금이 조회되진 않았지만, 원화예수금과 외화증거금 모두 없을 경우에는 알수없는 상태임
+                if not ovrs_ord_psbl_amt and not kr_deposit:
+                    return None
+                # 통합증거금도 없고 원화예수금과 외화증거금 둘중에 하나라도 있다면 통합증거금이 아님
                 return False
         else:
-            return False
+            return None
 
 
     def get_os_stock_balance(self) -> pd.DataFrame:
