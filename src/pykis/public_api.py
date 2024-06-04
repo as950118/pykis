@@ -812,7 +812,7 @@ class Api:  # pylint: disable=too-many-public-methods
                 "ORD_GNO_BRNO": "",
                 "ODNO": "",
                 "INQR_DVSN_3": "00",
-                "INQR_DVSN_1": "00",
+                "INQR_DVSN_1": "",
                 f"CTX_AREA_FK{query_code}": "",
                 f"CTX_AREA_NK{query_code}": ""
             }
